@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Golf Course Globe Mapper</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.117/Build/Cesium/Cesium.js"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.117/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+    <style>
+        /* Ensure html and body take full height */
+        html, body, #cesiumContainer {
+            width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden;
+            font-family: 'Inter', sans-serif; /* Use Inter font */
+        }
+        /* Style for the search container */
+        #searchContainer {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10; /* Ensure it's above the globe */
+            background-color: rgba(255, 255, 255, 0.9); /* Slightly transparent white */
+            backdrop-filter: blur(5px); /* Add a blur effect */
+            border-radius: 0.5rem; /* Rounded corners */
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Soft shadow */
+        }
+        /* Style for pins */
+        .cesium-entity {
+            cursor: pointer;
+        }
+        /* Style for Cesium attribution - make it less intrusive */
+        .cesium-widget-credits {
+            display: block !important; /* Ensure it's visible but style it */
+            position: absolute;
+            bottom: 5px !important;
+            right: 5px !important;
+            font-size: 10px !important;
+            color: rgba(255, 255, 255, 0.7) !important; /* Lighter text */
+            background-color: rgba(0, 0, 0, 0.4) !important; /* Darker background */
+            padding: 2px 5px !important;
+            border-radius: 3px !important;
+            z-index: 1; /* Below search bar */
+        }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gray-900">
+
+    <div id="cesiumContainer" class="relative">
+        <div id="searchContainer" class="p-3 flex items-center space-x-2 w-full max-w-md md:max-w-lg">
+            <input
+                type="text"
+                id="searchBox"
+                placeholder="Search for a golf course..."
+                class="flex-grow px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition duration-150 ease-in-out"
+            />
+            <button
+                id="searchButton"
+                class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition duration-150 ease-in-out shadow-sm"
+            >
+                Search
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // IMPORTANT: You need a CesiumJS access token for Cesium ION assets (like terrain and imagery).
+        // Get a free token from https://cesium.com/ion/signup/
+        // Replace 'YOUR_CESIUM_ION_ACCESS_TOKEN' below with your actual token.
+        Cesium.Ion.defaultAccessToken = 'YOUR_CESIUM_ION_ACCESS_TOKEN'; // <-- REPLACE THIS
+
+        // Initialize the Cesium Viewer in the 'cesiumContainer' div.
+        const viewer = new Cesium.Viewer('cesiumContainer', {
+            // Use Cesium World Terrain for 3D landscape
+            terrainProvider: Cesium.createWorldTerrain(),
+            // Hide unnecessary default widgets for a cleaner look
+            animation: false,          // Hide animation widget
+            baseLayerPicker: false,    // Hide base layer picker
+            fullscreenButton: false,   // Hide fullscreen button
+            vrButton: false,           // Hide VR button
+            geocoder: false,           // Hide Cesium's default geocoder (we have our own)
+            homeButton: false,         // Hide home button
+            infoBox: true,             // Show info box when clicking entities (pins)
+            sceneModePicker: false,    // Hide scene mode picker (3D/2D/Columbus)
+            selectionIndicator: false, // Hide selection indicator
+            timeline: false,           // Hide timeline widget
+            navigationHelpButton: false, // Hide navigation help button
+            navigationInstructionsInitiallyVisible: false,
+            // Use a high-quality imagery layer
+            // imageryProvider: new Cesium.IonImageryProvider({ assetId: 3954 }), // Sentinel-2 example
+        });
+
+        // Improve visual quality
+        viewer.scene.globe.enableLighting = true; // Enable dynamic lighting
+        viewer.scene.fog.enabled = true; // Enable atmospheric fog
+        viewer.scene.fog.density = 0.0001;
+        viewer.scene.fog.screenSpaceErrorFactor = 2;
+
+        // --- Search Functionality (Placeholder) ---
+        const searchBox = document.getElementById('searchBox');
+        const searchButton = document.getElementById('searchButton');
+
+        const performSearch = () => {
+            const query = searchBox.value.trim();
+            if (query) {
+                console.log('Searching for:', query);
+                // ** Placeholder **
+                // In a real app, you would call your chosen search API here (Google Places, Mapbox, etc.)
+                // Example: fetch(`/api/search?query=${encodeURIComponent(query)}`)
+                // Then process the results (lat, lon) and potentially fly the camera there:
+                // viewer.camera.flyTo({ destination: Cesium.Cartesian3.fromDegrees(longitude, latitude, 10000) });
+                alert(`Search initiated for: "${query}". Check the console.\n(Note: Actual search API integration is needed)`);
+            } else {
+                alert('Please enter a search term.');
+            }
+        };
+
+        searchButton.addEventListener('click', performSearch);
+        searchBox.addEventListener('keypress', (event) => {
+            if (event.key === 'Enter') {
+                performSearch();
+            }
+        });
+
+        // --- Pinning Functionality (Basic: Click to Add Pin) ---
+        const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+
+        // Counter for unique pin IDs
+        let pinCounter = 0;
+
+        handler.setInputAction(function(click) {
+            const cartesian = viewer.camera.pickEllipsoid(click.position, viewer.scene.globe.ellipsoid);
+            if (cartesian) {
+                const cartographic = Cesium.Cartographic.fromCartesian(cartesian);
+                const longitude = Cesium.Math.toDegrees(cartographic.longitude);
+                const latitude = Cesium.Math.toDegrees(cartographic.latitude);
+
+                pinCounter++;
+                const pinId = `pin-${pinCounter}`;
+
+                console.log(`Adding pin ${pinId} at Lon: ${longitude.toFixed(4)}, Lat: ${latitude.toFixed(4)}`);
+
+                // Add a pin (PointGraphics) entity
+                viewer.entities.add({
+                    id: pinId, // Unique ID for the pin
+                    position: cartesian,
+                    point: {
+                        pixelSize: 10,
+                        color: Cesium.Color.RED,
+                        outlineColor: Cesium.Color.WHITE,
+                        outlineWidth: 2
+                    },
+                    // Add description to show in the InfoBox on click
+                    description: `
+                        <div class="p-2">
+                            <h2 class="text-lg font-semibold mb-1">Pinned Location ${pinCounter}</h2>
+                            <p><strong>Latitude:</strong> ${latitude.toFixed(4)}</p>
+                            <p><strong>Longitude:</strong> ${longitude.toFixed(4)}</p>
+                            <p class="mt-2 text-sm text-gray-600">You clicked here!</p>
+                            </div>
+                    `
+                });
+
+                // Optional: Fly the camera smoothly to the newly added pin
+                // viewer.flyTo(viewer.entities.getById(pinId));
+
+            }
+        }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+        // Optional: Add subtle zoom limits
+        viewer.scene.screenSpaceCameraController.minimumZoomDistance = 100; // Min distance in meters
+        viewer.scene.screenSpaceCameraController.maximumZoomDistance = 40000000; // Max distance
+
+        // Optional: Set initial camera view (e.g., looking at North America)
+        viewer.camera.flyHome(0); // Fly to default home view immediately
+        // Or set a specific view:
+        // viewer.camera.setView({
+        //     destination: Cesium.Cartesian3.fromDegrees(-95.0, 40.0, 15000000.0) // Lon, Lat, Height
+        // });
+
+    </script>
+
+</body>
+</html>
